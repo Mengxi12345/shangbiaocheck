@@ -1,0 +1,12 @@
+# 敏感配置（Cookie 等），不提交
+backend/config.py
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.env
+
+# 系统文件
+.DS_Store

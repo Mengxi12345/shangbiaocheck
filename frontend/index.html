@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>商标风险查询</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: #f5f7fa;
+      color: #333;
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 28px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      margin-bottom: 24px;
+    }
+
+    textarea {
+      width: 100%;
+      height: 120px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 14px;
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.2s;
+      font-family: inherit;
+    }
+
+    textarea:focus { border-color: #4a6cf7; }
+
+    .hint {
+      font-size: 12px;
+      color: #aaa;
+      margin-top: 8px;
+      margin-bottom: 16px;
+    }
+
+    button {
+      background: #4a6cf7;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 28px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    button:hover { background: #3a5ce5; }
+    button:disabled { background: #aaa; cursor: not-allowed; }
+
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th {
+      background: #f8f9fb;
+      padding: 12px 14px;
+      text-align: left;
+      font-weight: 600;
+      color: #555;
+      border-bottom: 1px solid #eee;
+    }
+
+    td {
+      padding: 13px 14px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fafafa; }
+
+    .name { font-weight: 500; }
+
+    /* 风险标签 */
+    .tag {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .tag-low  { background: #e6f7ee; color: #27ae60; }
+    .tag-high { background: #fdecea; color: #e53935; }
+    .tag-err  { background: #f5f5f5; color: #999; }
+
+    /* 状态格 */
+    .s0 { color: #27ae60; font-weight: 500; }
+    .s1 { color: #f39c12; font-weight: 500; }
+    .s2 { color: #e53935; font-weight: 500; }
+    .s- { color: #bbb; }
+
+    .empty {
+      text-align: center;
+      padding: 40px;
+      color: #bbb;
+      font-size: 14px;
+    }
+
+    .error-msg { color: #e53935; font-size: 13px; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>商标风险查询</h1>
+  <p class="subtitle">检测第 35（广告销售）、41（教育娱乐）、42（网站服务）类注册风险</p>
+
+  <div class="card">
+    <textarea id="input" placeholder="输入商标名称，多个名称用空格或换行分隔&#10;例如：寻鹿 觅晴 遇鹿"></textarea>
+    <p class="hint">status 说明：0 = 可注册（无冲突）&nbsp;&nbsp;1 = 有风险&nbsp;&nbsp;2 = 高冲突</p>
+    <button id="btn" onclick="check()">开始查询</button>
+  </div>
+
+  <div class="card" id="result-card" style="display:none;">
+    <table>
+      <thead>
+        <tr>
+          <th>商标名称</th>
+          <th>第35类<br><small style="font-weight:400;color:#aaa">广告销售</small></th>
+          <th>第41类<br><small style="font-weight:400;color:#aaa">教育娱乐</small></th>
+          <th>第42类<br><small style="font-weight:400;color:#aaa">网站服务</small></th>
+          <th>综合风险</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  const API = '/api/check';
+
+  function statusClass(s) {
+    if (s === '0') return 's0';
+    if (s === '1') return 's1';
+    if (s === '2') return 's2';
+    return 's-';
+  }
+
+  function statusText(s) {
+    if (s === '0') return '✓ 0';
+    if (s === '1') return '⚠ 1';
+    if (s === '2') return '✗ 2';
+    return s || '-';
+  }
+
+  function renderRow(item) {
+    if (item.error) {
+      return `<tr>
+        <td class="name">${item.name}</td>
+        <td colspan="3" class="error-msg">${item.error}</td>
+        <td><span class="tag tag-err">查询失败</span></td>
+      </tr>`;
+    }
+
+    const d = item.details;
+    const riskTag = item.risk === 'low'
+      ? '<span class="tag tag-low">低风险</span>'
+      : '<span class="tag tag-high">高风险</span>';
+
+    return `<tr>
+      <td class="name">${item.name}</td>
+      <td class="${statusClass(d['35'])}">${statusText(d['35'])}</td>
+      <td class="${statusClass(d['41'])}">${statusText(d['41'])}</td>
+      <td class="${statusClass(d['42'])}">${statusText(d['42'])}</td>
+      <td>${riskTag}</td>
+    </tr>`;
+  }
+
+  async function check() {
+    const names = document.getElementById('input').value.trim();
+    if (!names) return;
+
+    const btn = document.getElementById('btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>查询中...';
+
+    const tbody = document.getElementById('tbody');
+    const card = document.getElementById('result-card');
+
+    tbody.innerHTML = '';
+    card.style.display = 'none';
+
+    try {
+      const res = await fetch(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ names }),
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const results = await res.json();
+
+      if (!results.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty">无结果</td></tr>';
+      } else {
+        tbody.innerHTML = results.map(renderRow).join('');
+      }
+
+      card.style.display = 'block';
+    } catch (e) {
+      tbody.innerHTML = `<tr><td colspan="5" class="error-msg" style="padding:16px">请求失败：${e.message}，请确认后端服务已启动</td></tr>`;
+      card.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '开始查询';
+    }
+  }
+
+  // 支持 Ctrl+Enter 提交
+  document.getElementById('input').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) check();
+  });
+</script>
+</body>
+</html>
