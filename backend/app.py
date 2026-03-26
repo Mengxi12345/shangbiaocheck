@@ -39,6 +39,11 @@ def parse_jsonp(text):
     return None
 
 
+def is_blocked(text):
+    """检测是否触发了阿里反爬惩罚页"""
+    return 'punishPath' in text or '_____tmd_____' in text
+
+
 def query_trademark(name):
     """调用阿里云商标查询接口，返回 (data, raw_text)"""
     callback = f'jsonp_{int(time.time() * 1000)}_{random.randint(10000, 99999)}'
@@ -54,7 +59,7 @@ def query_trademark(name):
     resp = requests.get(BASE_URL, params=params, headers=HEADERS, timeout=15)
     resp.raise_for_status()
     raw = resp.text
-    print(f'[{name}] status={resp.status_code} body_prefix={raw[:200]}')
+    print(f'[{name}] status={resp.status_code} body_prefix={raw[:120]}')
     return parse_jsonp(raw), raw
 
 
@@ -89,9 +94,11 @@ def analyze(name):
     try:
         data, raw = query_trademark(name)
 
+        if is_blocked(raw):
+            return {'name': name, 'error': '触发反爬限制，请稍后重试或减少批量数量'}
+
         if not data:
-            preview = raw[:300] if raw else '空响应'
-            return {'name': name, 'error': f'JSONP 解析失败，响应前300字符: {preview}'}
+            return {'name': name, 'error': 'JSONP 解析失败'}
 
         if str(data.get('code')) != '200':
             return {'name': name, 'error': f"接口返回: code={data.get('code')} message={data.get('message')}"}
@@ -103,7 +110,6 @@ def analyze(name):
             if item['code'] in TARGET_CODES
         }
 
-        # 三个大类 status 均为 "0" 才是低风险
         all_zero = all(status_map.get(code) == '0' for code in TARGET_CODES)
 
         return {
@@ -123,16 +129,21 @@ def check():
     body = request.get_json()
     raw = body.get('names', '')
 
-    # 支持空格或换行分隔
     names = [n.strip() for n in re.split(r'[\s\n]+', raw) if n.strip()]
 
     if not names:
         return jsonify({'error': '请输入至少一个名称'}), 400
 
+    # 单次最多查 20 个，避免超时和触发反爬
+    if len(names) > 20:
+        return jsonify({'error': f'单次最多查询 20 个，当前输入 {len(names)} 个，请分批查询'}), 400
+
     results = []
-    for name in names:
+    for i, name in enumerate(names):
         results.append(analyze(name))
-        time.sleep(0.4)  # 避免触发频率限制
+        if i < len(names) - 1:
+            # 随机延迟 1~2 秒，降低触发反爬概率
+            time.sleep(random.uniform(1, 2))
 
     return jsonify(results)
 
