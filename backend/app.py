@@ -15,7 +15,7 @@ BASE_URL = 'https://tm-api.aliyun.com/trademarksearch/search'
 HEADERS = {
     'accept': '*/*',
     'accept-language': 'zh-CN,zh;q=0.9',
-    'referer': 'https://tm.aliyun.com/channel/search',
+    'referer': 'https://tm.aliyun.com/channel/search?accounttraceid=9fa7af3cb5dd4a698d104e3a6ea22bd4fzjj',
     'sec-ch-ua': '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
     'sec-ch-ua-mobile': '?0',
     'sec-ch-ua-platform': '"macOS"',
